@@ -1,0 +1,144 @@
+/* Suliworld Signifiers: glyphs in the menu and the suggestion list.
+   They read the Suliworld theme's Style Settings variables, with defaults when the theme isn't used. */
+
+.sws-glyph {
+    display: inline-flex;
+    justify-content: center;
+    width: 1.4em;
+    margin-right: 0.35em;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.sws-glyph {
+    color: var(--sws-c);
+}
+
+.sws-glyph[data-sig="todo"] { --sws-g: var(--sw-bujo-todo-glyph, "•"); --sws-c: var(--sw-bujo-todo-color, var(--text-normal)); }
+.sws-glyph[data-sig="done"] { --sws-g: var(--sw-bujo-done-glyph, "×"); --sws-c: var(--sw-bujo-done-color, var(--text-faint)); }
+.sws-glyph[data-sig="event"] { --sws-g: var(--sw-bujo-event-glyph, "✱"); --sws-c: var(--sw-bujo-event-color, var(--sw-accent, #E0522A)); }
+.sws-glyph[data-sig="note"] { --sws-g: var(--sw-bujo-note-glyph, "■"); --sws-c: var(--sw-bujo-note-color, var(--sw-heading-green, #1F3B2D)); }
+.sws-glyph[data-sig="migrated"] { --sws-g: var(--sw-bujo-migrated-glyph, "›"); --sws-c: var(--sw-bujo-migrated-color, var(--text-muted)); }
+.sws-glyph[data-sig="scheduled"] { --sws-g: var(--sw-bujo-scheduled-glyph, "‹"); --sws-c: var(--sw-bujo-scheduled-color, var(--text-muted)); }
+.sws-glyph[data-sig="important"] { --sws-g: var(--sw-bujo-important-glyph, "!"); --sws-c: var(--sw-bujo-important-color, var(--sw-ink-peach, #712B13)); }
+
+.sws-hint {
+    margin-left: auto;
+    padding-left: 1.2em;
+    font-family: var(--font-monospace);
+    font-size: 0.85em;
+    color: var(--text-faint);
+}
+
+.menu-item-title:has(> .sws-glyph) {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.sws-suggestion {
+    display: flex;
+    align-items: center;
+}
+
+/* ---------- Drawing the signifiers in notes ----------
+   Same rendering as the Suliworld theme, so the signifiers look the same with any theme.
+   Active when the "Draw signifiers" setting is on (body.sws-draw) and the Suliworld theme
+   isn't already drawing them (body.sw-bujo). Symbols, colors and size follow the theme's
+   Style Settings variables when they exist, else Obsidian's own colors.
+   The character between the brackets picks the symbol; Live Preview puts data-task on
+   .HyperMD-task-line, reading view on the <li> (data-task="" for an unchecked task). */
+body.sws-draw:not(.sw-bujo) :is(li, .HyperMD-task-line):is([data-task=""], [data-task=" "]) {
+    --sw-bujo-glyph: var(--sw-bujo-todo-glyph, "•");
+    --sw-bujo-color: var(--sw-bujo-todo-color, var(--sw-text, var(--text-normal)));
+}
+
+body.sws-draw:not(.sw-bujo) :is(li, .HyperMD-task-line):is([data-task="x"], [data-task="X"]) {
+    --sw-bujo-glyph: var(--sw-bujo-done-glyph, "×");
+    --sw-bujo-color: var(--sw-bujo-done-color, var(--sw-subtle, var(--text-faint)));
+}
+
+body.sws-draw:not(.sw-bujo) :is(li, .HyperMD-task-line)[data-task="*"] {
+    --sw-bujo-glyph: var(--sw-bujo-event-glyph, "✱");
+    --sw-bujo-color: var(--sw-bujo-event-color, var(--sw-accent, var(--color-orange)));
+}
+
+body.sws-draw:not(.sw-bujo) :is(li, .HyperMD-task-line)[data-task="n"] {
+    --sw-bujo-glyph: var(--sw-bujo-note-glyph, "■");
+    --sw-bujo-color: var(--sw-bujo-note-color, var(--sw-heading-green, var(--color-green)));
+}
+
+body.sws-draw:not(.sw-bujo) :is(li, .HyperMD-task-line)[data-task=">"] {
+    --sw-bujo-glyph: var(--sw-bujo-migrated-glyph, "›");
+    --sw-bujo-color: var(--sw-bujo-migrated-color, var(--sw-subtle, var(--text-faint)));
+}
+
+body.sws-draw:not(.sw-bujo) :is(li, .HyperMD-task-line)[data-task="<"] {
+    --sw-bujo-glyph: var(--sw-bujo-scheduled-glyph, "‹");
+    --sw-bujo-color: var(--sw-bujo-scheduled-color, var(--sw-subtle, var(--text-faint)));
+}
+
+body.sws-draw:not(.sw-bujo) :is(li, .HyperMD-task-line)[data-task="!"] {
+    --sw-bujo-glyph: var(--sw-bujo-important-glyph, "!");
+    --sw-bujo-color: var(--sw-bujo-important-color, var(--sw-ink-peach, var(--color-red)));
+}
+
+body.sws-draw:not(.sw-bujo) li:is([data-task=""], [data-task=" "], [data-task="x"], [data-task="X"], [data-task="*"], [data-task="n"], [data-task=">"], [data-task="<"], [data-task="!"]) > input.task-list-item-checkbox,
+body.sws-draw:not(.sw-bujo) li:is([data-task=""], [data-task=" "], [data-task="x"], [data-task="X"], [data-task="*"], [data-task="n"], [data-task=">"], [data-task="<"], [data-task="!"]) > p > input.task-list-item-checkbox,
+body.sws-draw:not(.sw-bujo) .HyperMD-task-line:is([data-task=""], [data-task=" "], [data-task="x"], [data-task="X"], [data-task="*"], [data-task="n"], [data-task=">"], [data-task="<"], [data-task="!"]) .task-list-item-checkbox {
+    position: relative;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    font-size: inherit;
+}
+
+body.sws-draw:not(.sw-bujo) li:is([data-task=""], [data-task=" "], [data-task="x"], [data-task="X"], [data-task="*"], [data-task="n"], [data-task=">"], [data-task="<"], [data-task="!"]) > input.task-list-item-checkbox::after,
+body.sws-draw:not(.sw-bujo) li:is([data-task=""], [data-task=" "], [data-task="x"], [data-task="X"], [data-task="*"], [data-task="n"], [data-task=">"], [data-task="<"], [data-task="!"]) > p > input.task-list-item-checkbox::after,
+body.sws-draw:not(.sw-bujo) .HyperMD-task-line:is([data-task=""], [data-task=" "], [data-task="x"], [data-task="X"], [data-task="*"], [data-task="n"], [data-task=">"], [data-task="<"], [data-task="!"]) .task-list-item-checkbox::after {
+    content: var(--sw-bujo-glyph);
+    position: absolute;
+    inset: 0;
+    top: 0;
+    width: auto;
+    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-mask-image: none;
+    mask-image: none;
+    background: none;
+    font-family: var(--font-text);
+    font-size: var(--sw-bujo-size, 1.1em);
+    font-weight: 700;
+    font-style: normal;
+    line-height: 1;
+    color: var(--sw-bujo-color);
+}
+
+/* Important: the symbol sits on a small peach disc */
+body.sws-draw:not(.sw-bujo) li[data-task="!"] > input.task-list-item-checkbox::after,
+body.sws-draw:not(.sw-bujo) li[data-task="!"] > p > input.task-list-item-checkbox::after,
+body.sws-draw:not(.sw-bujo) .HyperMD-task-line[data-task="!"] .task-list-item-checkbox::after {
+    border-radius: 50%;
+    background: var(--sw-tint-peach, color-mix(in srgb, var(--color-orange) 22%, transparent));
+    font-size: calc(var(--sw-bujo-size, 1.1em) * 0.75);
+}
+
+body.sws-draw:not(.sw-bujo) :is(li, .HyperMD-task-line):is([data-task=""], [data-task=" "], [data-task="x"], [data-task="X"], [data-task="*"], [data-task="n"], [data-task=">"], [data-task="<"], [data-task="!"]) .task-list-item-checkbox:hover::after {
+    opacity: 0.7;
+}
+
+/* Only [x] reads as done; the other signifiers keep normal text */
+body.sws-draw:not(.sw-bujo) .markdown-rendered li:is([data-task="*"], [data-task="n"], [data-task="!"]),
+body.sws-draw:not(.sw-bujo) .markdown-source-view.mod-cm6 .HyperMD-task-line:is([data-task="*"], [data-task="n"], [data-task="!"]) {
+    color: var(--text-normal);
+    text-decoration: none;
+}
+
+body.sws-draw:not(.sw-bujo) .markdown-rendered li:is([data-task=">"], [data-task="<"]),
+body.sws-draw:not(.sw-bujo) .markdown-source-view.mod-cm6 .HyperMD-task-line:is([data-task=">"], [data-task="<"]) {
+    color: var(--text-muted);
+    text-decoration: none;
+}
