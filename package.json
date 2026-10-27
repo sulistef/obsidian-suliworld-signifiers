@@ -1,0 +1,34 @@
+{
+	"name": "suliworld-signifiers",
+	"version": "1.0.1",
+	"description": "Bullet journal signifiers for Obsidian tasks: draw them with any theme, click to mark done, right-click or long-press for a menu, suggestions as you type.",
+	"main": "main.js",
+	"type": "module",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"version": "node version-bump.mjs && git add manifest.json versions.json",
+		"lint": "eslint ."
+	},
+	"keywords": [
+		"obsidian",
+		"bullet journal",
+		"tasks"
+	],
+	"author": "Stéphane Sulikowski",
+	"license": "MIT",
+	"devDependencies": {
+		"@eslint/js": "^9.39.4",
+		"@types/node": "^22.15.17",
+		"@codemirror/state": "^6.5.0",
+		"@codemirror/view": "^6.38.0",
+		"esbuild": "0.25.5",
+		"eslint": "^9.39.4",
+		"eslint-plugin-obsidianmd": "^0.4.0",
+		"globals": "^17.6.0",
+		"jiti": "^2.6.1",
+		"obsidian": "latest",
+		"typescript": "^5.8.3",
+		"typescript-eslint": "^8.59.1"
+	}
+}

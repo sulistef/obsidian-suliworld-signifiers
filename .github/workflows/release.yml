@@ -14,6 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
       - name: Check that the tag matches manifest.json
         run: |
           version=$(jq -r .version manifest.json)
@@ -21,6 +26,12 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match manifest.json version $version"
             exit 1
           fi
+
+      - name: Lint and build
+        run: |
+          npm ci
+          npm run lint
+          npm run build
 
       - name: Create the release
         env:

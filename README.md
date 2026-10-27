@@ -39,9 +39,22 @@ Until the plugin is listed in Obsidian's community plugins:
 2. Put them in your vault, in `.obsidian/plugins/suliworld-signifiers/`.
 3. In Obsidian, go to Settings → Community plugins, and turn on Suliworld Signifiers.
 
+## Development
+
+The plugin is written in TypeScript (`src/`) and bundled with esbuild into `main.js`.
+
+```bash
+npm install
+npm run dev     # rebuild main.js on every change
+npm run build   # type-check (strict) and build for production
+npm run lint    # ESLint with Obsidian's official rules (eslint-plugin-obsidianmd)
+```
+
+To try it in a vault, copy `main.js`, `manifest.json`, and `styles.css` into `.obsidian/plugins/suliworld-signifiers/`.
+
 ## Releasing
 
-Bump `version` in `manifest.json` (and add it to `versions.json`), commit, then push a tag with the same version (for example `1.0.1`). The release workflow attaches `main.js`, `manifest.json`, and `styles.css` to a GitHub release.
+Run `npm version patch` (or `minor`, `major`): it updates `manifest.json` and `versions.json`. Push the commit and the tag. The release workflow lints, builds, and attaches `main.js`, `manifest.json`, and `styles.css` to a GitHub release.
 
 ## License
 
