@@ -27,10 +27,11 @@ jobs:
             exit 1
           fi
 
-      - name: Lint and build
+      - name: Lint, test and build
         run: |
           npm ci
           npm run lint
+          npm test
           npm run build
 
       - name: Create the release

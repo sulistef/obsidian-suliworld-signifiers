@@ -1,6 +1,6 @@
 import { Editor, EditorPosition, EditorSuggest, EditorSuggestContext, EditorSuggestTriggerInfo } from "obsidian";
 import type SuliworldSignifiers from "./main";
-import { glyphEl, Signifier, SIGNIFIERS } from "./signifiers";
+import { glyphEl, Signifier } from "./signifiers";
 
 /** Typing "- [" lists the signifiers, so nothing has to be typed inside the brackets. */
 export class SignifierSuggest extends EditorSuggest<Signifier> {
@@ -19,7 +19,7 @@ export class SignifierSuggest extends EditorSuggest<Signifier> {
 	}
 
 	getSuggestions(_context: EditorSuggestContext): Signifier[] {
-		return [...SIGNIFIERS];
+		return [...this.plugin.settings.signifiers];
 	}
 
 	renderSuggestion(sig: Signifier, el: HTMLElement): void {

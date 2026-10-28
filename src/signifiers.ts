@@ -3,14 +3,17 @@
 export interface Signifier {
 	/** The character between the task's brackets. */
 	char: string;
-	/** Used in command ids, CSS hooks and the Suliworld theme's Style Settings variables. */
+	/** Stable across edits, for command ids and CSS hooks. */
 	id: string;
 	label: string;
-	/** Default symbol when the theme doesn't set one. */
 	glyph: string;
+	/** Empty colors inherit Obsidian's palette. */
+	colorLight: string;
+	colorDark: string;
+	disc: boolean;
 }
 
-export const SIGNIFIERS: readonly Signifier[] = [
+const PRESETS = [
 	{ char: " ", id: "todo", label: "Task", glyph: "•" },
 	{ char: "x", id: "done", label: "Done", glyph: "×" },
 	{ char: "*", id: "event", label: "Event", glyph: "✱" },
@@ -19,6 +22,10 @@ export const SIGNIFIERS: readonly Signifier[] = [
 	{ char: "<", id: "scheduled", label: "Scheduled", glyph: "‹" },
 	{ char: "!", id: "important", label: "Important", glyph: "!" },
 ];
+
+export const DEFAULT_SIGNIFIERS: readonly Signifier[] = PRESETS.map((sig) => ({
+	...sig, colorLight: "", colorDark: "", disc: sig.id === "important",
+}));
 
 /** "- [c] text" or "1. [c] text": indent and marker with "[", the character, "]". */
 export const TASK_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)(.)(\])/;
@@ -50,15 +57,11 @@ export function withoutSignifier(text: string): string {
 	return text.replace(TASK_PREFIX_RE, "$1");
 }
 
-/** The symbol in use: the Suliworld theme's Style Settings value when set, else the default. */
-export function glyphText(sig: Signifier, doc: Document = activeDocument): string {
-	const value = getComputedStyle(doc.body).getPropertyValue(`--sw-bujo-${sig.id}-glyph`).trim();
-	return value.replace(/^["']|["']$/g, "") || sig.glyph;
-}
-
-/** The symbol as real text (so native menus show it too), colored by styles.css like the theme. */
+/** The configured symbol as real text, including in native menus. */
 export function glyphEl(sig: Signifier, doc: Document = activeDocument): HTMLSpanElement {
-	const span = createSpan({ cls: "sws-glyph", text: glyphText(sig, doc) });
+	const span = doc.adoptNode(createSpan());
+	span.className = "sws-glyph";
+	span.textContent = sig.glyph;
 	span.dataset.sig = sig.id;
 	return span;
 }

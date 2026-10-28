@@ -1,11 +1,13 @@
-import { Editor, MarkdownPostProcessorContext, MarkdownView, Menu, Plugin, TFile } from "obsidian";
+import { Command, Editor, MarkdownPostProcessorContext, MarkdownView, Menu, Notice, Plugin, requireApiVersion, TFile } from "obsidian";
 import type { EditorView } from "@codemirror/view";
-import { DEFAULT_SETTINGS, SignifiersSettings, SignifiersSettingTab } from "./settings";
+import { defaultSettings, importLegacy, loadSettings, type SignifiersSettings } from "./config";
+import { drawingCss } from "./drawing";
+import { SignifiersSettingTab } from "./settings";
 import { SignifierSuggest } from "./suggest";
 import {
 	glyphEl,
 	isDone,
-	SIGNIFIERS,
+	type Signifier,
 	taskChar,
 	withoutSignifier,
 	withSignifier,
@@ -26,16 +28,36 @@ const LONG_PRESS_MS = 450;
 const AFTER_LONG_PRESS_MS = 700;
 
 export default class SuliworldSignifiers extends Plugin {
-	settings: SignifiersSettings = DEFAULT_SETTINGS;
+	settings: SignifiersSettings = defaultSettings();
+	private drawingWindows = new Map<Document, { style: HTMLStyleElement; observer: MutationObserver; legacy: boolean }>();
+	private signifierCommands = new Map<string, Command>();
+	private saveQueue: Promise<void> = Promise.resolve();
 	/** Reading view: each rendered block holding tasks, with its post-processor context. */
 	private sectionContexts = new WeakMap<HTMLElement, MarkdownPostProcessorContext>();
 	private suppressUntil = 0;
 	private pressTimer: number | null = null;
 
 	async onload(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, (await this.loadData()) as Partial<SignifiersSettings>);
+		const raw = await this.loadData() as Partial<SignifiersSettings> | null;
+		this.settings = loadSettings(raw);
+		if (!Array.isArray(raw?.signifiers) && raw?.schemaVersion !== 1) {
+			const path = `${this.app.vault.configDir}/plugins/obsidian-style-settings/data.json`;
+			try {
+				const legacy: unknown = await this.app.vault.adapter.exists(path)
+					? JSON.parse(await this.app.vault.adapter.read(path)) : {};
+				importLegacy(this.settings, legacy, raw);
+				await this.saveData(this.settings);
+			} catch {
+				// Leave migration pending if the legacy file could not be read.
+				new Notice("Could not import old signifier settings. The plugin will use defaults and retry on its next load.");
+			}
+		}
 
 		this.registerWindow(window);
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			const win = leaf.view.containerEl.ownerDocument.defaultView;
+			if (win) this.registerWindow(win);
+		});
 		this.registerEvent(this.app.workspace.on("window-open", (_workspaceWindow, win) => this.registerWindow(win)));
 
 		this.registerMarkdownPostProcessor((el, ctx) => {
@@ -44,20 +66,15 @@ export default class SuliworldSignifiers extends Plugin {
 
 		this.registerEditorSuggest(new SignifierSuggest(this));
 
-		for (const sig of SIGNIFIERS) {
-			this.addCommand({
-				id: `set-${sig.id}`,
-				name: `Set signifier: ${sig.label} [${sig.char}]`,
-				editorCallback: (editor) => this.mapSelectedLines(editor, (text) => withSignifier(text, sig.char)),
-			});
-		}
+		this.syncSignifierCommands();
 		this.addCommand({
 			id: "cycle",
 			name: "Cycle signifier",
 			editorCallback: (editor) => {
 				const current = taskChar(editor.getLine(editor.getCursor().line));
-				const i = SIGNIFIERS.findIndex((s) => s.char === current);
-				const next = SIGNIFIERS[(i + 1) % SIGNIFIERS.length];
+				const signifiers = this.settings.signifiers;
+				const i = signifiers.findIndex((s) => s.char === (current === "X" ? "x" : current));
+				const next = signifiers[(i + 1) % signifiers.length];
 				if (next) this.mapSelectedLines(editor, (text) => withSignifier(text, next.char));
 			},
 		});
@@ -71,19 +88,49 @@ export default class SuliworldSignifiers extends Plugin {
 	}
 
 	onunload(): void {
-		for (const doc of this.documents()) doc.body.removeClasses(["sw-signifiers-plugin", "sws-draw"]);
+		for (const [doc, drawing] of this.drawingWindows) {
+			drawing.observer.disconnect();
+			drawing.style.remove();
+			doc.body.removeClasses(["sw-signifiers-plugin", "sws-draw"]);
+			if (drawing.legacy) doc.body.addClass("sw-bujo");
+		}
+		this.drawingWindows.clear();
 		this.cancelPress();
 	}
 
 	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+		this.applyDrawing();
+		this.syncSignifierCommands();
+		const snapshot = structuredClone(this.settings);
+		this.saveQueue = this.saveQueue.catch(() => {}).then(() => this.saveData(snapshot));
+		await this.saveQueue;
 	}
 
 	/** Body classes and listeners for one window: the main one, and each popout window. */
 	private registerWindow(win: Window): void {
 		const doc = win.document;
+		if (this.drawingWindows.has(doc)) return;
+		// Dynamic selectors follow user-defined Markdown characters, so they cannot live in static styles.css.
+		const style = doc.createElement("style");
+		style.dataset.sws = "signifiers";
+		doc.head.appendChild(style);
+		// Compatibility with pre-separation Suliworld releases. Restore the legacy
+		// class on unload; never mutate Style Settings' saved data.
+		const drawing = { style, legacy: doc.body.hasClass("sw-bujo"), observer: new MutationObserver(() => {
+			if (doc.body.hasClass("sw-bujo")) {
+				drawing.legacy = true;
+				doc.body.removeClass("sw-bujo");
+			}
+		}) };
+		doc.body.removeClass("sw-bujo");
+		drawing.observer.observe(doc.body, { attributes: true, attributeFilter: ["class"] });
+		this.drawingWindows.set(doc, drawing);
 		doc.body.addClass("sw-signifiers-plugin");
-		doc.body.toggleClass("sws-draw", this.settings.drawSignifiers);
+		this.applyDrawing();
+		this.registerDomEvent(win, "unload", () => {
+			drawing.observer.disconnect();
+			this.drawingWindows.delete(doc);
+		});
 		// Capture phase, so Obsidian's own checkbox toggle never runs
 		this.registerDomEvent(doc, "click", (evt) => void this.onClick(evt), { capture: true });
 		this.registerDomEvent(doc, "contextmenu", (evt) => this.onContextMenu(evt), { capture: true });
@@ -95,22 +142,67 @@ export default class SuliworldSignifiers extends Plugin {
 		this.registerDomEvent(doc, "keydown", (evt) => this.onKeyDown(evt), { capture: true });
 	}
 
-	private documents(): Set<Document> {
-		const docs = new Set<Document>([document]);
-		this.app.workspace.iterateAllLeaves((leaf) => {
-			docs.add(leaf.view.containerEl.ownerDocument);
-		});
-		return docs;
+	applyDrawing(): void {
+		const css = drawingCss(this.settings);
+		for (const [doc, drawing] of this.drawingWindows) {
+			doc.body.toggleClass("sws-draw", this.settings.drawSignifiers);
+			drawing.style.textContent = css;
+			for (const element of Array.from(doc.querySelectorAll<HTMLElement>(".sws-glyph[data-sig]"))) {
+				const sig = this.settings.signifiers.find((item) => item.id === element.dataset.sig);
+				if (sig) element.textContent = sig.glyph;
+			}
+		}
 	}
 
-	applyDrawing(): void {
-		for (const doc of this.documents()) doc.body.toggleClass("sws-draw", this.settings.drawSignifiers);
+	/** Settings can live in a separate window that isn't a workspace Markdown leaf. */
+	preparePreview(doc: Document): void {
+		if (doc.defaultView) this.registerWindow(doc.defaultView);
+	}
+
+	previewColor(sig: Signifier, mode: "light" | "dark", doc: Document): string {
+		const probe = glyphEl(sig, doc);
+		const container = doc.adoptNode(createDiv());
+		container.addClasses(["sw-signifiers-plugin", `theme-${mode}`]);
+		// Color rules use the body theme, so resolve inherited automatic colors in
+		// the current theme; explicit light/dark colors are shown by the picker.
+		container.appendChild(probe);
+		doc.body.appendChild(container);
+		const rgb = doc.defaultView?.getComputedStyle(probe).color.match(/\d+/g);
+		container.remove();
+		return rgb && rgb.length >= 3 ? `#${rgb.slice(0, 3).map((value) => Number(value).toString(16).padStart(2, "0")).join("")}` : "#808080";
+	}
+
+	private syncSignifierCommands(): void {
+		for (const [id, command] of this.signifierCommands) {
+			if (this.settings.signifiers.some((sig) => sig.id === id)) continue;
+			if (requireApiVersion("1.7.2")) {
+				this.removeCommand(`set-${id}`);
+				this.signifierCommands.delete(id);
+			} else command.name = "Removed signifier";
+		}
+		for (const sig of this.settings.signifiers) {
+			const name = `Set signifier: ${sig.label} [${sig.char}]`;
+			const command = this.signifierCommands.get(sig.id);
+			if (command) { command.name = `${this.manifest.name}: ${name}`; continue; }
+			const id = sig.id;
+			this.signifierCommands.set(id, this.addCommand({
+				id: `set-${id}`, name,
+				editorCheckCallback: (checking, editor) => {
+					const current = this.settings.signifiers.find((item) => item.id === id);
+					if (!current) return false;
+					if (!checking) this.mapSelectedLines(editor, (text) => withSignifier(text, current.char));
+					return true;
+				},
+			}));
+		}
 	}
 
 	// ------------------------------------------------------------------ locating a checkbox's line
 	private checkboxFrom(target: EventTarget | null): HTMLElement | null {
-		if (!(target instanceof Element)) return null;
-		const cb = target.closest<HTMLElement>(".task-list-item-checkbox");
+		if (!target || !(target as Element).closest) return null;
+		const cb = (target as Element).closest<HTMLElement>(".task-list-item-checkbox");
+		const char = cb?.closest(".HyperMD-task-line, li[data-task]")?.getAttribute("data-task");
+		if (char === null || char === undefined || !this.settings.signifiers.some((sig) => sig.char === (char === "" ? " " : char) || (sig.id === "done" && char === "X"))) return null;
 		return cb?.closest(".markdown-source-view, .markdown-preview-view") ? cb : null;
 	}
 
@@ -162,11 +254,11 @@ export default class SuliworldSignifiers extends Plugin {
 	private async onClick(evt: MouseEvent): Promise<void> {
 		const cb = this.checkboxFrom(evt.target);
 		if (!cb) return;
+		const loc = this.locate(cb);
+		if (!loc) return;
 		evt.preventDefault();
 		evt.stopPropagation();
 		if (Date.now() < this.suppressUntil) return; // the click that ends a long press
-		const loc = this.locate(cb);
-		if (!loc) return;
 		const done = isDone(taskChar(await this.lineText(loc)));
 		await this.applyToLine(loc, (text) => withSignifier(text, done ? " " : "x"));
 	}
@@ -214,7 +306,7 @@ export default class SuliworldSignifiers extends Plugin {
 				.onClick(() => void this.applyToLine(loc, (text) => withSignifier(text, done ? " " : "x"))),
 		);
 		menu.addSeparator();
-		for (const sig of SIGNIFIERS) {
+		for (const sig of this.settings.signifiers) {
 			menu.addItem((item) =>
 				item
 					.setTitle(
@@ -224,7 +316,7 @@ export default class SuliworldSignifiers extends Plugin {
 							f.createSpan({ text: `  [${sig.char}]`, cls: "sws-hint" });
 						}),
 					)
-					.setChecked(current === sig.char)
+					.setChecked(current === sig.char || (sig.id === "done" && isDone(current)))
 					.onClick(() => void this.applyToLine(loc, (text) => withSignifier(text, sig.char))),
 			);
 		}
@@ -254,11 +346,12 @@ export default class SuliworldSignifiers extends Plugin {
 	private onKeyDown(evt: KeyboardEvent): void {
 		if (evt.key !== "Enter" || evt.shiftKey || evt.altKey || evt.metaKey || evt.ctrlKey || evt.isComposing) return;
 		const target = evt.target;
-		if (!(target instanceof Element) || !target.closest(".markdown-source-view .cm-content")) return;
-		if (target.ownerDocument.querySelector(".suggestion-container")) return; // a suggestion list owns Enter
+		if (!target || !(target as Element).closest?.(".markdown-source-view .cm-content")) return;
+		const element = target as Element;
+		if (element.ownerDocument.querySelector(".suggestion-container")) return; // a suggestion list owns Enter
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 		const cm = view ? (view.editor as EditorWithCm).cm : undefined;
-		if (!cm || !cm.contentDOM.contains(target)) return;
+		if (!cm || !cm.contentDOM.contains(element)) return;
 		if (this.continueSignifier(cm)) {
 			evt.preventDefault();
 			evt.stopPropagation();
@@ -275,7 +368,7 @@ export default class SuliworldSignifiers extends Plugin {
 		const m = line.text.match(/^(\s*)([-*+])(\s+)\[(.)\]\s(.*)$/);
 		if (!m) return false;
 		const [, indent = "", marker = "-", space = " ", char = " ", rest = ""] = m;
-		if (char === " " || isDone(char)) return false; // tasks: Obsidian's own behavior
+		if (char === " " || isDone(char) || !this.settings.signifiers.some((sig) => sig.char === char)) return false; // tasks: Obsidian's own behavior
 		if (!rest.trim()) {
 			// An empty signifier line ends the list, as an empty task does
 			view.dispatch({ changes: { from: line.from, to: line.to, insert: "" }, selection: { anchor: line.from }, userEvent: "input" });

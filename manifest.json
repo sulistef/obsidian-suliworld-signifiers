@@ -1,7 +1,7 @@
 {
 	"id": "suliworld-signifiers",
 	"name": "Suliworld Signifiers",
-	"version": "1.0.1",
+	"version": "1.1.0",
 	"minAppVersion": "1.6.0",
 	"description": "Add bullet journal signifiers to tasks: draw them with any theme, click to mark done, right-click or long-press to pick one from a menu, and get suggestions as you type.",
 	"author": "Stéphane Sulikowski",
